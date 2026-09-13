@@ -1,0 +1,1584 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Fábrica de modelos de lenguaje — entiende MiniMind montando uno</title>
+<meta name="description" content="Monta un modelo de lenguaje pieza a pieza en el navegador. Todo se entrena aquí, en JavaScript, sin instalar nada.">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Archivo:wght@500;600;800&family=IBM+Plex+Mono:wght@400;500&family=Source+Serif+4:opsz,wght@8..60,400;8..60,600&display=swap" rel="stylesheet">
+<style>
+:root{
+  --tinta:#16323C; --papel:#F0F2EC; --panel:#FFFFFF; --linea:#C6D0C8;
+  --jade:#1E7A6B; --ambar:#E0A526; --ciruela:#7B3B63;
+  --suave:#E4EAE2; --apagado:#5E7178;
+  --radio:4px;
+  --sans:"Archivo",system-ui,"Segoe UI",sans-serif;
+  --serif:"Source Serif 4",Georgia,serif;
+  --mono:"IBM Plex Mono",ui-monospace,Menlo,monospace;
+}
+*{box-sizing:border-box}
+html{scroll-behavior:smooth}
+body{
+  margin:0; background:var(--papel); color:var(--tinta);
+  font-family:var(--serif); font-size:18px; line-height:1.62;
+  -webkit-font-smoothing:antialiased;
+}
+h1,h2,h3,h4{font-family:var(--sans); line-height:1.1; margin:0}
+h1{font-weight:800; font-size:clamp(32px,5.6vw,56px); letter-spacing:-.025em}
+h2{font-weight:800; font-size:clamp(25px,3.4vw,34px); letter-spacing:-.02em; margin-bottom:14px}
+h3{font-weight:600; font-size:20px; letter-spacing:-.01em; margin-bottom:8px}
+p{margin:0 0 16px}
+a{color:var(--jade)}
+code,kbd{font-family:var(--mono); font-size:.86em; background:var(--suave); padding:1px 5px; border-radius:3px}
+table{border-collapse:collapse; width:100%; font-size:16px}
+th,td{text-align:left; padding:9px 12px; border-bottom:1px solid var(--linea)}
+th{font-family:var(--sans); font-weight:600; font-size:14px}
+tbody tr:last-child td{border-bottom:none}
+
+/* ---------------------------------------------------------------- esqueleto */
+.marco{display:grid; grid-template-columns:232px minmax(0,1fr)}
+.rail{
+  position:sticky; top:0; align-self:start; height:100vh; overflow:auto;
+  border-right:1px solid var(--linea); padding:26px 20px; background:var(--papel);
+}
+.rail .marca{font-family:var(--sans); font-weight:800; font-size:16px; letter-spacing:-.02em; margin-bottom:4px}
+.rail .sub{font-size:13px; color:var(--apagado); line-height:1.4; margin-bottom:22px}
+.etapas{list-style:none; margin:0; padding:0}
+.etapa a{
+  display:grid; grid-template-columns:24px 1fr; gap:9px; align-items:baseline;
+  padding:7px 0; text-decoration:none; color:var(--tinta);
+  font-family:var(--sans); font-size:14.5px; font-weight:500; border-bottom:1px solid transparent;
+}
+.etapa a:hover{color:var(--jade)}
+.etapa .n{font-family:var(--mono); font-size:12px; color:var(--apagado)}
+.etapa.hecha .n{color:var(--jade)}
+.etapa.hecha a::after{content:"✓"; color:var(--jade); font-size:13px}
+.etapa.activa a{color:var(--jade); font-weight:600}
+.estado{margin-top:26px; padding-top:18px; border-top:1px solid var(--linea)}
+.estado .rot{font-family:var(--sans); font-size:12.5px; color:var(--apagado); margin-bottom:6px}
+#estadoModelo{
+  font-family:var(--sans); font-weight:600; font-size:14px; display:inline-block;
+  padding:5px 10px; border-radius:99px; background:var(--suave); color:var(--apagado);
+}
+#estadoModelo.vivo{background:var(--jade); color:#fff}
+
+main{padding:0 clamp(20px,4.5vw,64px) 100px}
+section{padding:56px 0; border-top:1px solid var(--linea)}
+section:first-of-type{border-top:none}
+.prosa{max-width:64ch}
+.prosa.ancha{max-width:72ch}
+.guia{color:var(--apagado); font-size:16.5px}
+
+/* ------------------------------------------------------------------- inicio */
+.hero{
+  background:var(--tinta); color:#EAF0EC; margin:0 calc(-1 * clamp(20px,4.5vw,64px));
+  padding:clamp(36px,6vw,72px) clamp(20px,4.5vw,64px) clamp(30px,5vw,56px);
+}
+.hero h1{color:#fff; max-width:16ch}
+.hero .entrada{max-width:54ch; margin:18px 0 34px; color:#C3D2D2; font-size:19px}
+.escenario{
+  display:grid; grid-template-columns:minmax(0,1.15fr) minmax(260px,.85fr); gap:34px;
+  align-items:start; border-top:1px solid #2C4C56; padding-top:28px;
+}
+#heroFrase{
+  font-family:var(--mono); font-size:clamp(17px,2.5vw,23px); line-height:1.75;
+  min-height:5em; color:#fff;
+}
+#heroFrase .cursor{color:var(--ambar)}
+#heroFrase .nueva{color:var(--ambar)}
+.rotulo{font-family:var(--sans); font-size:12.5px; font-weight:500; color:#8FA8AC; margin-bottom:10px}
+.barras{display:flex; flex-direction:column; gap:7px}
+.fila{display:grid; grid-template-columns:92px 1fr 46px; gap:9px; align-items:center; font-size:14px}
+.fila .pal{font-family:var(--mono); font-size:13px; text-align:right; white-space:nowrap; overflow:hidden; text-overflow:ellipsis}
+.pista{background:#2C4C56; height:17px; border-radius:2px; overflow:hidden}
+.pista i{display:block; height:100%; background:var(--ambar); width:0; transition:width .18s linear}
+.fila.elegida .pal{color:var(--ambar); font-weight:500}
+.fila .num{font-family:var(--mono); font-size:12px; color:#8FA8AC}
+.herolinea{display:flex; gap:12px; align-items:center; margin-top:26px; flex-wrap:wrap}
+
+/* ------------------------------------------------------------------ paneles */
+.panel{
+  background:var(--panel); border:1px solid var(--linea); border-radius:var(--radio);
+  padding:clamp(18px,2.6vw,28px); max-width:900px; margin:24px 0;
+}
+.panel h3{margin-bottom:4px}
+.panel .pie{font-size:15px; color:var(--apagado); margin:14px 0 0}
+.controles{display:flex; gap:10px; flex-wrap:wrap; align-items:center; margin:16px 0}
+.btn{
+  font-family:var(--sans); font-weight:600; font-size:15px; color:#fff; background:var(--jade);
+  border:none; border-radius:var(--radio); padding:11px 18px; cursor:pointer;
+}
+.btn:hover{background:#186356}
+.btn[disabled]{background:var(--suave); color:#9BAAA4; cursor:not-allowed}
+.btn.sec{background:transparent; color:var(--tinta); border:1px solid var(--linea)}
+.btn.sec:hover{border-color:var(--jade); color:var(--jade); background:transparent}
+.btn.rl{background:var(--ciruela)}
+.btn.rl:hover{background:#652F51}
+.btn.peq{padding:7px 13px; font-size:13.5px}
+:focus-visible{outline:3px solid var(--ambar); outline-offset:2px}
+
+.ficha{font-family:var(--mono); font-size:14px; background:var(--suave); border:1px solid var(--linea);
+  border-radius:3px; padding:2px 7px; display:inline-block; margin:0 3px 5px 0; white-space:pre}
+.ficha.nueva{background:#FBEBC6; border-color:var(--ambar)}
+.registro{font-family:var(--mono); font-size:13.5px; line-height:1.75; max-height:190px; overflow:auto;
+  background:#F7F9F5; border:1px solid var(--linea); border-radius:3px; padding:12px}
+.salida{font-family:var(--mono); font-size:14.5px; line-height:1.9}
+.salida b{color:var(--jade); font-weight:500}
+
+.medidor{display:grid; grid-template-columns:200px 1fr; gap:14px; align-items:center; margin:10px 0; font-size:15px}
+.medidor .pista{background:var(--suave); height:26px; border-radius:3px}
+.medidor .pista i{background:var(--jade); transition:width .3s ease}
+.medidor.alerta .pista i{background:var(--ambar)}
+
+input[type=range]{width:100%; accent-color:var(--jade)}
+.deslizador{display:grid; grid-template-columns:1fr 78px; gap:12px; align-items:center; margin:12px 0}
+.deslizador label{font-family:var(--sans); font-size:14px}
+.deslizador .val{font-family:var(--mono); font-size:14px; text-align:right}
+select,input[type=text]{
+  font-family:var(--serif); font-size:16px; padding:9px 11px;
+  border:1px solid var(--linea); border-radius:var(--radio); background:#fff; color:var(--tinta);
+}
+
+.bloqueado{border:1px dashed var(--linea); border-radius:var(--radio); padding:26px; background:#FAFBF9; max-width:900px}
+.bloqueado p{margin:0 0 14px; color:var(--apagado)}
+
+/* --------------------------------------------------------------- atención */
+.rejilla{display:grid; gap:2px; font-family:var(--mono); font-size:11px; overflow:auto; padding-bottom:6px}
+.rejilla .celda{aspect-ratio:1; border-radius:2px; background:var(--tinta); position:relative}
+.rejilla .cab{color:var(--apagado); font-size:10.5px; white-space:nowrap; display:flex; align-items:center}
+.rejilla .cab.v{justify-content:flex-end; padding-right:5px}
+.rejilla .cab.h{writing-mode:vertical-rl; transform:rotate(180deg); justify-content:flex-end; padding-bottom:4px}
+
+/* ---------------------------------------------------------------- diagrama */
+.piezas{display:grid; grid-template-columns:repeat(auto-fit,minmax(170px,1fr)); gap:12px; margin-top:8px}
+.pieza{
+  text-align:left; background:#F7F9F5; border:1px solid var(--linea); border-radius:var(--radio);
+  padding:13px 15px; cursor:pointer; font-family:var(--sans); font-size:15px; font-weight:600; color:var(--tinta);
+}
+.pieza small{display:block; font-family:var(--serif); font-weight:400; font-size:14px; color:var(--apagado); margin-top:3px}
+.pieza[aria-pressed=true]{background:var(--tinta); color:#fff; border-color:var(--tinta)}
+.pieza[aria-pressed=true] small{color:#A9C0C0}
+#piezaDetalle{margin-top:16px; padding:16px 18px; background:var(--suave); border-radius:var(--radio); font-size:16.5px}
+
+/* ------------------------------------------------------------------- chat */
+#chatLog{display:flex; flex-direction:column; gap:10px; min-height:120px; margin-bottom:14px}
+.msg{max-width:42ch; padding:9px 13px; border-radius:12px; font-size:16px}
+.msg.yo{align-self:flex-end; background:var(--tinta); color:#fff; border-bottom-right-radius:3px}
+.msg.bot{align-self:flex-start; background:var(--suave); border-bottom-left-radius:3px; font-family:var(--mono); font-size:14.5px}
+.msg.aviso{align-self:flex-start; background:#FBEBC6; font-size:15px}
+.sugerencias{display:flex; gap:7px; flex-wrap:wrap; margin-bottom:12px}
+
+details{margin:16px 0; font-size:16px}
+summary{cursor:pointer; font-family:var(--sans); font-weight:600; font-size:15px; color:var(--jade)}
+details pre{font-family:var(--mono); font-size:13px; line-height:1.6; background:var(--tinta); color:#DCE8E4;
+  padding:14px; border-radius:var(--radio); overflow:auto}
+.nota{border-left:3px solid var(--ambar); padding:2px 0 2px 16px; margin:22px 0; font-size:16.5px; max-width:62ch}
+.cierre{background:var(--tinta); color:#DCE8E4; margin:0 calc(-1 * clamp(20px,4.5vw,64px)); padding:54px clamp(20px,4.5vw,64px)}
+.cierre h2,.cierre h3{color:#fff}
+.cierre a{color:var(--ambar)}
+.cierre th,.cierre td{border-bottom-color:#2C4C56}
+
+@media (max-width:880px){
+  .marco{grid-template-columns:1fr}
+  .rail{position:static; height:auto; border-right:none; border-bottom:1px solid var(--linea); padding:16px 20px}
+  .rail .sub{display:none}
+  .etapas{display:flex; gap:14px; overflow:auto; padding-bottom:4px}
+  .etapa a{padding:4px 0; white-space:nowrap}
+  .estado{margin-top:12px; padding-top:12px}
+  .escenario{grid-template-columns:1fr; gap:24px}
+  body{font-size:17px}
+}
+@media (prefers-reduced-motion:reduce){
+  html{scroll-behavior:auto}
+  *{transition:none !important; animation:none !important}
+}
+</style>
+</head>
+<body>
+<div class="marco">
+
+<!-- ======================================================= raíl de montaje -->
+<nav class="rail" aria-label="Etapas">
+  <div class="marca">Fábrica de modelos</div>
+  <p class="sub">Monta un modelo de lenguaje pieza a pieza. Todo ocurre en esta pestaña.</p>
+  <ol class="etapas" id="etapas">
+    <li class="etapa" data-clave="tokens"><a href="#tokens"><span class="n">1</span><span>Trocear el texto</span></a></li>
+    <li class="etapa" data-clave="piezas"><a href="#piezas"><span class="n">2</span><span>Montar la máquina</span></a></li>
+    <li class="etapa" data-clave="pretrain"><a href="#pretrain"><span class="n">3</span><span>Entrenar</span></a></li>
+    <li class="etapa" data-clave="atencion"><a href="#atencion"><span class="n">4</span><span>Mirar dentro</span></a></li>
+    <li class="etapa" data-clave="sft"><a href="#sft"><span class="n">5</span><span>Enseñar a conversar</span></a></li>
+    <li class="etapa" data-clave="refuerzo"><a href="#refuerzo"><span class="n">6</span><span>Poner nota</span></a></li>
+    <li class="etapa" data-clave="inferencia"><a href="#inferencia"><span class="n">7</span><span>Guardar y usar</span></a></li>
+  </ol>
+  <div class="estado">
+    <div class="rot">Estado del modelo</div>
+    <span id="estadoModelo">sin entrenar</span>
+  </div>
+</nav>
+
+<main>
+
+<!-- ================================================================= hero -->
+<section id="inicio" style="padding-top:0">
+  <div class="hero">
+    <h1>Un modelo de lenguaje solo sabe hacer una cosa</h1>
+    <p class="entrada">Mirar el texto que lleva escrito y elegir la palabra siguiente. Nada más.
+      Luego repite. Aquí lo estás viendo hacerlo, en directo, con las cuentas a la vista.</p>
+    <div class="escenario">
+      <div>
+        <div class="rotulo">Está escribiendo</div>
+        <div id="heroFrase"></div>
+      </div>
+      <div>
+        <div class="rotulo">Candidatas a palabra siguiente</div>
+        <div class="barras" id="heroBarras"></div>
+      </div>
+    </div>
+    <div class="herolinea">
+      <button class="btn" id="heroPaso">Paso a paso</button>
+      <button class="btn sec" id="heroAuto" style="color:#EAF0EC;border-color:#2C4C56">Pausar</button>
+      <span class="guia" style="color:#8FA8AC;font-size:15px">Este de aquí arriba solo cuenta repeticiones. El de verdad lo montas tú a partir de la etapa&nbsp;2.</span>
+    </div>
+  </div>
+</section>
+
+<!-- ============================================================= minimind -->
+<section id="minimind">
+  <div class="prosa">
+    <h2>De qué va todo esto</h2>
+    <p>Detrás de ChatGPT hay un programa con cientos de miles de millones de números ajustados,
+      llamados <b>parámetros</b>. Entrenar uno cuesta millones de euros, así que casi nadie ha visto
+      lo que pasa dentro.</p>
+    <p><a href="https://github.com/jingyaogong/minimind" target="_blank" rel="noopener">MiniMind</a>
+      es un proyecto libre que hace la caja pequeña: entrena un modelo de lenguaje entero, desde cero,
+      en unas dos horas y por menos de medio euro. No es inteligente, pero tiene exactamente las mismas
+      piezas que los grandes.</p>
+    <p>Esta página va un paso más allá: el modelo que vas a entrenar cabe en tu navegador y tarda
+      unos segundos. Es el mismo esquema, más pequeño todavía.</p>
+  </div>
+  <div class="panel" id="panelTam">
+    <h3>Tres modelos, el mismo esquema</h3>
+    <p class="pie" style="margin:0 0 18px">Cada barra está en escala logarítmica: si fuera proporcional,
+      las dos primeras serían invisibles.</p>
+    <div id="barrasTam"></div>
+  </div>
+  <div class="prosa">
+    <p>Lo que sigue son siete etapas. En cada una hay algo que ejecutar: un botón, un deslizador,
+      una frase que escribir. El modelo que montes se queda en la memoria de esta pestaña y se
+      arrastra de una etapa a la siguiente, así que conviene ir en orden.</p>
+  </div>
+</section>
+
+<!-- =============================================================== tokens -->
+<section id="tokens">
+  <div class="prosa">
+    <h2>1 · Trocear el texto</h2>
+    <p>Un ordenador no ve letras, ve números. Hace falta un traductor, y se llama
+      <b>tokenizador</b>. Dar un número a cada palabra del diccionario no funciona: los idiomas
+      tienen cientos de miles de palabras y cada día aparecen nombres nuevos.</p>
+    <p>La solución real se llama <b>BPE</b> y es casi tonta de lo simple. Empieza por letras sueltas y
+      repite siempre la misma jugada: busca la pareja de símbolos que más veces aparece junta y
+      fúndela en un símbolo nuevo. Las sílabas y las palabras frecuentes se forman solas.</p>
+  </div>
+  <div class="panel">
+    <h3>Fusiona tú</h3>
+    <p class="pie" style="margin:0 0 14px">Cambia el texto si quieres. Cada fusión que aplicas crea un token nuevo.</p>
+    <input type="text" id="bpeTexto" style="width:100%;font-family:var(--mono);font-size:14px"
+           value="el gato come pescado y el perro come pienso , el gato duerme y el perro duerme">
+    <div class="controles">
+      <button class="btn" id="bpeFusionar">Fusionar la pareja más repetida</button>
+      <button class="btn sec" id="bpeDiez">Hacer 10 de golpe</button>
+      <button class="btn sec" id="bpeReset">Volver a empezar</button>
+      <span class="guia" style="font-size:15px" id="bpeContador">0 fusiones</span>
+    </div>
+    <div class="rotulo" style="color:var(--apagado)">El texto, troceado ahora mismo</div>
+    <div id="bpeSalida" style="margin:8px 0 18px"></div>
+    <div class="rotulo" style="color:var(--apagado)">Fusiones aplicadas</div>
+    <div class="registro" id="bpeLista">Todavía ninguna: cada letra es un token.</div>
+  </div>
+  <div class="prosa">
+    <h3>Por qué MiniMind tiene un vocabulario ridículo</h3>
+    <p>Cuantas más fusiones, más grande el vocabulario. Qwen2 tiene 151.643 tokens; Llama&nbsp;3,
+      128.000; MiniMind, 6.400. Parece una desventaja, y en parte lo es. Pero el modelo guarda una
+      lista de números por cada token, y esa tabla ocupa <code>vocabulario × dimensión</code>
+      parámetros. Muévelo y mira qué pasa.</p>
+  </div>
+  <div class="panel">
+    <div class="deslizador">
+      <label for="slVocab">Tamaño del vocabulario: <span id="vVocab" class="val"></span></label>
+      <input type="range" id="slVocab" min="1000" max="151643" step="100" value="6400">
+    </div>
+    <div class="deslizador">
+      <label for="slDim">Números por token (dimensión): <span id="vDim" class="val"></span></label>
+      <input type="range" id="slDim" min="64" max="2048" step="64" value="768">
+    </div>
+    <div class="medidor" id="medidorTabla">
+      <span>La tabla de tokens ocupa</span>
+      <div class="pista"><i style="width:8%"></i></div>
+    </div>
+    <p class="pie" id="textoTabla"></p>
+  </div>
+</section>
+
+<!-- =============================================================== piezas -->
+<section id="piezas">
+  <div class="prosa">
+    <h2>2 · Montar la máquina</h2>
+    <p>El modelo de la portada solo mira la palabra anterior. Por eso se pierde: si le dices
+      <em>«el gato que vivía en la casa de mi abuela…»</em>, cuando llega a «abuela» ya ha olvidado
+      que hablábamos de un gato.</p>
+    <p>Para escribir bien hay que mirar toda la frase a la vez y decidir qué partes importan.
+      Eso lo hace el <b>Transformer</b>, que son cuatro piezas. Las mismas cuatro que lleva MiniMind.
+      Púlsalas.</p>
+  </div>
+  <div class="panel">
+    <div class="piezas" id="listaPiezas"></div>
+    <div id="piezaDetalle">Elige una pieza para ver qué hace.</div>
+    <p class="pie">Tu modelo apila 3 capas con estas cuatro piezas y 32 números por token.
+      MiniMind-3 apila 8 capas con 768. Cambia la escala, no el esquema.</p>
+  </div>
+</section>
+
+<!-- ============================================================= pretrain -->
+<section id="pretrain">
+  <div class="prosa">
+    <h2>3 · Entrenar</h2>
+    <p>Los modelos grandes leen internet entero. Nosotros necesitamos algo que se aprenda en
+      segundos, así que el mundo de este modelo son doce animales: dónde viven, qué comen y qué
+      saben hacer, contados de seis maneras distintas. 72 frases en total.</p>
+    <p>Entrenar es un examen infinito que el modelo se corrige solo: se le tapa una palabra, la
+      predice, se compara con la real y se ajustan todos sus números un poquito en la dirección que
+      reduce el error. Ese error se llama <b>pérdida</b>. Millones de veces.</p>
+  </div>
+  <div class="panel">
+    <h3>Entrenamiento en directo</h3>
+    <p class="pie" style="margin:0 0 16px">Entre 10 y 20 segundos, según tu ordenador. La curva es la pérdida real,
+      calculada en tu procesador; las frases de la derecha las escribe el modelo tal y como va
+      quedando en ese momento.</p>
+    <div class="controles">
+      <button class="btn" id="btnEntrenar">Entrenar el modelo</button>
+      <span class="guia" id="progresoTexto" style="font-size:15px">Sin entrenar: sus números son aleatorios.</span>
+    </div>
+    <div class="escenario" style="border:none;padding:0;grid-template-columns:minmax(0,1fr) minmax(240px,.9fr);gap:26px">
+      <div>
+        <div class="rotulo" style="color:var(--apagado)">Pérdida</div>
+        <canvas id="lienzoPerdida" width="640" height="260" style="width:100%;height:auto;background:#F7F9F5;border:1px solid var(--linea);border-radius:3px"></canvas>
+      </div>
+      <div>
+        <div class="rotulo" style="color:var(--apagado)">Lo que escribe ahora mismo</div>
+        <div class="salida" id="muestras"></div>
+      </div>
+    </div>
+    <details>
+      <summary>El bucle de entrenamiento, tal cual se ejecuta en esta página</summary>
+<pre>for (let epoca = 0; epoca &lt; 60; epoca++) {
+  for (const frase of frases) {            // 72 frases
+    const entrada  = frase.slice(0, -1);   // "el oso vive en el bosque"
+    const objetivo = frase.slice(1);       //    "oso vive en el bosque ."
+    const logits  = adelante(modelo, entrada);      // predice
+    const perdida = crossEntropy(logits, objetivo); // se equivoca
+    backward(perdida);                              // calcula la corrección
+    adam(modelo, ritmo);                            // ajusta los 33.000 números
+  }
+}</pre>
+    </details>
+  </div>
+</section>
+
+<!-- ============================================================= atención -->
+<section id="atencion">
+  <div class="prosa">
+    <h2>4 · Mirar dentro</h2>
+    <p>Podemos abrir la caja. Al escribir cada palabra, el modelo ha repartido su atención entre
+      las anteriores. Aquí está ese reparto: cada fila es una palabra mirando, cada columna una
+      palabra mirada. Cuanto más ámbar, más atención.</p>
+  </div>
+  <div id="atencionCaja"></div>
+</section>
+
+<!-- ================================================================== sft -->
+<section id="sft">
+  <div class="prosa">
+    <h2>5 · Enseñar a conversar</h2>
+    <p>Ya tienes un modelo que continúa textos. Pero un asistente no continúa textos: responde
+      preguntas. Son cosas distintas, y el modelo todavía no lo sabe. Pregúntale y verás.</p>
+  </div>
+  <div id="sftCaja"></div>
+</section>
+
+<!-- ============================================================= refuerzo -->
+<section id="refuerzo">
+  <div class="prosa">
+    <h2>6 · Poner nota</h2>
+    <p>Hasta ahora enseñábamos copiando respuestas correctas. Ahora le dejamos escribir las suyas
+      y le ponemos nota. Las que sacan buena nota se refuerzan; las malas se tiran. Es la diferencia
+      entre copiar los ejercicios resueltos y hacerlos tú y que te los corrijan.</p>
+    <p>Ese corrector puede ser una persona (RLHF), otra IA (RLAIF) o una regla automática, que es lo
+      que usamos aquí. Y el corrector lo escribes tú: mueve los pesos y mira en qué se convierte
+      el modelo.</p>
+  </div>
+  <div id="rlCaja"></div>
+</section>
+
+<!-- =========================================================== inferencia -->
+<section id="inferencia">
+  <div class="prosa">
+    <h2>7 · Guardar y usar</h2>
+    <p>Un modelo se entrena una vez y se usa millones de veces. Son dos actividades distintas y
+      conviene tener clara la frontera.</p>
+    <table style="max-width:640px;margin:22px 0">
+      <thead><tr><th></th><th>Entrenamiento</th><th>Inferencia</th></tr></thead>
+      <tbody>
+        <tr><td>Los parámetros</td><td>cambian</td><td>no se tocan</td></tr>
+        <tr><td>Hace falta</td><td>los textos de ejemplo</td><td>solo el archivo guardado</td></tr>
+        <tr><td>Tarda</td><td>segundos, horas o meses</td><td>milisegundos</td></tr>
+        <tr><td>En MiniMind</td><td><code>trainer/train_*.py</code></td><td><code>eval_llm.py</code></td></tr>
+      </tbody>
+    </table>
+    <p>Cuando escribes en ChatGPT no estás entrenando nada: estás en inferencia, usando un modelo
+      que se entrenó hace meses y que no aprende de ti.</p>
+  </div>
+  <div id="infCaja"></div>
+</section>
+
+<!-- ============================================================== cierre -->
+<section id="cierre" style="border:none;padding-bottom:0">
+  <div class="cierre">
+    <div class="prosa ancha">
+      <h2>Lo que acabas de montar</h2>
+      <p>Un modelo de lenguaje completo: tokenizador, Transformer con atención, preentrenamiento,
+        ajuste a conversación, aprendizaje por refuerzo, guardado e inferencia. En JavaScript, en una
+        pestaña, sin instalar nada. Le faltan seis órdenes de magnitud para ser útil y ninguna pieza
+        para ser real.</p>
+      <h3 style="margin-top:30px">Glosario</h3>
+      <table>
+        <tbody>
+          <tr><td style="width:170px"><b>Parámetro</b></td><td>Cada número que el modelo ajusta al aprender</td></tr>
+          <tr><td><b>Token</b></td><td>El trozo de texto más pequeño que el modelo maneja</td></tr>
+          <tr><td><b>BPE</b></td><td>El algoritmo que decide cómo trocear: fusiona las parejas más repetidas</td></tr>
+          <tr><td><b>Transformer</b></td><td>La arquitectura de todos los modelos actuales, basada en la atención</td></tr>
+          <tr><td><b>Pérdida</b></td><td>Cuánto se equivoca. Entrenar es bajarla</td></tr>
+          <tr><td><b>Temperatura</b></td><td>Cuánto arriesga al elegir palabra: baja, previsible; alta, disparatado</td></tr>
+          <tr><td><b>Pretrain</b></td><td>Leer muchísimo texto para aprender el idioma y los hechos</td></tr>
+          <tr><td><b>SFT</b></td><td>Aprender el formato de conversación con ejemplos de diálogo</td></tr>
+          <tr><td><b>RLHF / RLAIF</b></td><td>Mejorar a base de notas puestas por personas o por una IA</td></tr>
+          <tr><td><b>Inferencia</b></td><td>Usar un modelo ya entrenado. Sus parámetros no cambian</td></tr>
+          <tr><td><b>Alucinación</b></td><td>Cuando el modelo afirma con total seguridad algo falso</td></tr>
+        </tbody>
+      </table>
+      <h3 style="margin-top:30px">Seguir tirando del hilo</h3>
+      <p><a href="https://github.com/jingyaogong/minimind" target="_blank" rel="noopener">jingyaogong/minimind</a>
+        — el repositorio. Su README es un curso entero.<br>
+        <a href="https://github.com/jingyaogong/minimind-v" target="_blank" rel="noopener">minimind-v</a>
+        — la versión que además ve imágenes.<br>
+        <a href="https://github.com/karpathy/llama2.c" target="_blank" rel="noopener">llama2.c</a>
+        — el proyecto que lo inspiró.</p>
+      <p style="color:#8FA8AC;font-size:15px;margin-top:30px">
+        Material didáctico construido sobre MiniMind (Jingyao Gong, licencia Apache 2.0).
+        Todo el código de esta página está a la vista: pulsa <kbd>Ctrl</kbd>+<kbd>U</kbd>.</p>
+    </div>
+  </div>
+</section>
+
+</main>
+</div>
+<script>
+/* ===========================================================================
+   NÚCLEO: un Transformer con retropropagación, en JavaScript puro.
+   Sin librerías. Todo ocurre en el navegador.
+   =========================================================================== */
+
+const TAPE = { ops: [], on: true };
+
+function tensor(r, c, data) {
+  return { r, c, d: data || new Float64Array(r * c), g: null, param: false };
+}
+function grad(t) {
+  if (!t.g) t.g = new Float64Array(t.r * t.c);
+  return t.g;
+}
+function push(out, back) {
+  if (TAPE.on) TAPE.ops.push({ out, back });
+  return out;
+}
+function backward(loss) {
+  grad(loss)[0] = 1;
+  for (let i = TAPE.ops.length - 1; i >= 0; i--) {
+    const op = TAPE.ops[i];
+    if (op.out.g) op.back();
+  }
+}
+function resetTape(params) {
+  TAPE.ops.length = 0;
+  for (const p of params) if (p.g) p.g.fill(0);
+}
+
+/* --------------------------------------------------------------- operaciones */
+
+function matmul(A, B) {
+  const out = tensor(A.r, B.c);
+  const a = A.d, b = B.d, o = out.d, K = A.c, N = B.c;
+  for (let i = 0; i < A.r; i++) {
+    const ai = i * K, oi = i * N;
+    for (let k = 0; k < K; k++) {
+      const av = a[ai + k];
+      if (av === 0) continue;
+      const bk = k * N;
+      for (let j = 0; j < N; j++) o[oi + j] += av * b[bk + j];
+    }
+  }
+  return push(out, () => {
+    const go = out.g, ga = grad(A), gb = grad(B);
+    for (let i = 0; i < A.r; i++) {
+      const ai = i * K, oi = i * N;
+      for (let k = 0; k < K; k++) {
+        const bk = k * N;
+        let s = 0;
+        const av = a[ai + k];
+        for (let j = 0; j < N; j++) {
+          const gv = go[oi + j];
+          s += gv * b[bk + j];
+          gb[bk + j] += av * gv;
+        }
+        ga[ai + k] += s;
+      }
+    }
+  });
+}
+
+function transpose(A) {
+  const out = tensor(A.c, A.r);
+  for (let i = 0; i < A.r; i++)
+    for (let j = 0; j < A.c; j++) out.d[j * A.r + i] = A.d[i * A.c + j];
+  return push(out, () => {
+    const ga = grad(A);
+    for (let i = 0; i < A.r; i++)
+      for (let j = 0; j < A.c; j++) ga[i * A.c + j] += out.g[j * A.r + i];
+  });
+}
+
+function add(A, B) {
+  const out = tensor(A.r, A.c);
+  for (let i = 0; i < out.d.length; i++) out.d[i] = A.d[i] + B.d[i];
+  return push(out, () => {
+    const ga = grad(A), gb = grad(B);
+    for (let i = 0; i < out.d.length; i++) { ga[i] += out.g[i]; gb[i] += out.g[i]; }
+  });
+}
+
+function mul(A, B) {
+  const out = tensor(A.r, A.c);
+  for (let i = 0; i < out.d.length; i++) out.d[i] = A.d[i] * B.d[i];
+  return push(out, () => {
+    const ga = grad(A), gb = grad(B);
+    for (let i = 0; i < out.d.length; i++) {
+      ga[i] += out.g[i] * B.d[i];
+      gb[i] += out.g[i] * A.d[i];
+    }
+  });
+}
+
+function scale(A, s) {
+  const out = tensor(A.r, A.c);
+  for (let i = 0; i < out.d.length; i++) out.d[i] = A.d[i] * s;
+  return push(out, () => {
+    const ga = grad(A);
+    for (let i = 0; i < out.d.length; i++) ga[i] += out.g[i] * s;
+  });
+}
+
+function silu(A) {
+  const out = tensor(A.r, A.c);
+  for (let i = 0; i < out.d.length; i++) {
+    const x = A.d[i];
+    out.d[i] = x / (1 + Math.exp(-x));
+  }
+  return push(out, () => {
+    const ga = grad(A);
+    for (let i = 0; i < out.d.length; i++) {
+      const x = A.d[i], s = 1 / (1 + Math.exp(-x));
+      ga[i] += out.g[i] * s * (1 + x * (1 - s));
+    }
+  });
+}
+
+// RMSNorm: reescala cada fila. Es el "cinturón de seguridad" del entrenamiento.
+function rmsnorm(A, gain) {
+  const out = tensor(A.r, A.c), n = A.c, eps = 1e-5;
+  const inv = new Float64Array(A.r);
+  for (let i = 0; i < A.r; i++) {
+    let ms = 0;
+    for (let j = 0; j < n; j++) { const v = A.d[i * n + j]; ms += v * v; }
+    inv[i] = 1 / Math.sqrt(ms / n + eps);
+    for (let j = 0; j < n; j++) out.d[i * n + j] = gain.d[j] * A.d[i * n + j] * inv[i];
+  }
+  return push(out, () => {
+    const ga = grad(A), gg = grad(gain);
+    for (let i = 0; i < A.r; i++) {
+      let S = 0;
+      for (let j = 0; j < n; j++) S += out.g[i * n + j] * gain.d[j] * A.d[i * n + j];
+      for (let j = 0; j < n; j++) {
+        const gy = out.g[i * n + j], x = A.d[i * n + j];
+        ga[i * n + j] += inv[i] * gain.d[j] * gy - Math.pow(inv[i], 3) * x * S / n;
+        gg[j] += gy * x * inv[i];
+      }
+    }
+  });
+}
+
+// Softmax con máscara causal: cada palabra solo puede mirar hacia atrás.
+function softmaxCausal(A) {
+  const out = tensor(A.r, A.c), n = A.c;
+  for (let i = 0; i < A.r; i++) {
+    let mx = -Infinity;
+    for (let j = 0; j <= i; j++) mx = Math.max(mx, A.d[i * n + j]);
+    let sum = 0;
+    for (let j = 0; j <= i; j++) { const e = Math.exp(A.d[i * n + j] - mx); out.d[i * n + j] = e; sum += e; }
+    for (let j = 0; j <= i; j++) out.d[i * n + j] /= sum;
+  }
+  return push(out, () => {
+    const ga = grad(A);
+    for (let i = 0; i < A.r; i++) {
+      let dot = 0;
+      for (let j = 0; j <= i; j++) dot += out.g[i * n + j] * out.d[i * n + j];
+      for (let j = 0; j <= i; j++) ga[i * n + j] += out.d[i * n + j] * (out.g[i * n + j] - dot);
+    }
+  });
+}
+
+// RoPE: gira los números de cada token según la posición que ocupa.
+function rope(A, dh) {
+  const out = tensor(A.r, A.c), heads = A.c / dh;
+  const rot = (src, dst, sign) => {
+    for (let t = 0; t < A.r; t++)
+      for (let h = 0; h < heads; h++)
+        for (let k = 0; k < dh; k += 2) {
+          const f = 1 / Math.pow(10000, k / dh), ang = t * f;
+          const co = Math.cos(ang), si = sign * Math.sin(ang);
+          const i0 = t * A.c + h * dh + k, i1 = i0 + 1;
+          dst[i0] += src[i0] * co - src[i1] * si;
+          dst[i1] += src[i0] * si + src[i1] * co;
+        }
+  };
+  rot(A.d, out.d, 1);
+  return push(out, () => { rot(out.g, grad(A), -1); });
+}
+
+function sliceCols(A, start, len) {
+  const out = tensor(A.r, len);
+  for (let i = 0; i < A.r; i++)
+    for (let j = 0; j < len; j++) out.d[i * len + j] = A.d[i * A.c + start + j];
+  return push(out, () => {
+    const ga = grad(A);
+    for (let i = 0; i < A.r; i++)
+      for (let j = 0; j < len; j++) ga[i * A.c + start + j] += out.g[i * len + j];
+  });
+}
+
+function concatCols(parts) {
+  const r = parts[0].r, c = parts.reduce((s, p) => s + p.c, 0);
+  const out = tensor(r, c);
+  let off = 0;
+  for (const p of parts) {
+    for (let i = 0; i < r; i++)
+      for (let j = 0; j < p.c; j++) out.d[i * c + off + j] = p.d[i * p.c + j];
+    off += p.c;
+  }
+  return push(out, () => {
+    let o = 0;
+    for (const p of parts) {
+      const gp = grad(p);
+      for (let i = 0; i < r; i++)
+        for (let j = 0; j < p.c; j++) gp[i * p.c + j] += out.g[i * c + o + j];
+      o += p.c;
+    }
+  });
+}
+
+function embed(table, ids) {
+  const out = tensor(ids.length, table.c);
+  for (let i = 0; i < ids.length; i++)
+    for (let j = 0; j < table.c; j++) out.d[i * table.c + j] = table.d[ids[i] * table.c + j];
+  return push(out, () => {
+    const gt = grad(table);
+    for (let i = 0; i < ids.length; i++)
+      for (let j = 0; j < table.c; j++) gt[ids[i] * table.c + j] += out.g[i * table.c + j];
+  });
+}
+
+// Pérdida: cuánto se equivoca al predecir la palabra siguiente.
+function crossEntropy(logits, targets) {
+  const out = tensor(1, 1), V = logits.c, n = targets.length;
+  let total = 0;
+  const probs = new Float64Array(n * V);
+  for (let i = 0; i < n; i++) {
+    let mx = -Infinity;
+    for (let j = 0; j < V; j++) mx = Math.max(mx, logits.d[i * V + j]);
+    let sum = 0;
+    for (let j = 0; j < V; j++) { const e = Math.exp(logits.d[i * V + j] - mx); probs[i * V + j] = e; sum += e; }
+    for (let j = 0; j < V; j++) probs[i * V + j] /= sum;
+    total += -Math.log(Math.max(probs[i * V + targets[i]], 1e-12));
+  }
+  out.d[0] = total / n;
+  return push(out, () => {
+    const gl = grad(logits), s = out.g[0] / n;
+    for (let i = 0; i < n; i++)
+      for (let j = 0; j < V; j++)
+        gl[i * V + j] += s * (probs[i * V + j] - (j === targets[i] ? 1 : 0));
+  });
+}
+
+/* ------------------------------------------------------------------- modelo */
+
+let SEED = 12345;
+function setSeed(s) { SEED = s; }
+function rnd() {                       // aleatorio reproducible
+  SEED = (SEED * 1664525 + 1013904223) % 4294967296;
+  return SEED / 4294967296;
+}
+function gauss(s) {                    // normal aproximada
+  return (rnd() + rnd() + rnd() + rnd() + rnd() + rnd() - 3) * s;
+}
+function param(r, c, s) {
+  const t = tensor(r, c);
+  if (s) for (let i = 0; i < t.d.length; i++) t.d[i] = gauss(s);
+  else t.d.fill(1);
+  t.param = true;
+  return t;
+}
+
+function crearModelo(V, cfg) {
+  const { dim, capas, cabezas } = cfg;
+  const oculta = dim * 2, s = 0.05;
+  const m = { V, cfg, tabla: param(V, dim, s), capas: [], normaFinal: param(1, dim), params: [] };
+  for (let i = 0; i < capas; i++) {
+    m.capas.push({
+      n1: param(1, dim), n2: param(1, dim),
+      wq: param(dim, dim, s), wk: param(dim, dim, s),
+      wv: param(dim, dim, s), wo: param(dim, dim, s),
+      puerta: param(dim, oculta, s), arriba: param(dim, oculta, s), abajo: param(oculta, dim, s),
+    });
+  }
+  m.params.push(m.tabla, m.normaFinal);
+  for (const c of m.capas) for (const k in c) m.params.push(c[k]);
+  m.adam = m.params.map(p => ({ m: new Float64Array(p.d.length), v: new Float64Array(p.d.length) }));
+  m.paso = 0;
+  return m;
+}
+
+function adelante(m, ids, guardarAtencion) {
+  const { dim, cabezas } = m.cfg, dh = dim / cabezas;
+  let x = embed(m.tabla, ids);
+  const atenciones = [];
+  for (const capa of m.capas) {
+    const z = rmsnorm(x, capa.n1);
+    const q = rope(matmul(z, capa.wq), dh);
+    const k = rope(matmul(z, capa.wk), dh);
+    const v = matmul(z, capa.wv);
+    const cabezasSalida = [];
+    for (let h = 0; h < cabezas; h++) {
+      const qh = sliceCols(q, h * dh, dh), kh = sliceCols(k, h * dh, dh), vh = sliceCols(v, h * dh, dh);
+      const puntos = scale(matmul(qh, transpose(kh)), 1 / Math.sqrt(dh));
+      const at = softmaxCausal(puntos);
+      if (guardarAtencion) atenciones.push(at);
+      cabezasSalida.push(matmul(at, vh));
+    }
+    x = add(x, matmul(concatCols(cabezasSalida), capa.wo));
+    const z2 = rmsnorm(x, capa.n2);
+    x = add(x, matmul(mul(silu(matmul(z2, capa.puerta)), matmul(z2, capa.arriba)), capa.abajo));
+  }
+  const h = rmsnorm(x, m.normaFinal);
+  const logits = matmul(h, transpose(m.tabla));   // pesos compartidos con la tabla
+  return { logits, atenciones };
+}
+
+function adam(m, lr) {
+  m.paso++;
+  const b1 = 0.9, b2 = 0.999, eps = 1e-8;
+  const c1 = 1 - Math.pow(b1, m.paso), c2 = 1 - Math.pow(b2, m.paso);
+  for (let i = 0; i < m.params.length; i++) {
+    const p = m.params[i], st = m.adam[i];
+    if (!p.g) continue;
+    for (let j = 0; j < p.d.length; j++) {
+      const g = p.g[j];
+      st.m[j] = b1 * st.m[j] + (1 - b1) * g;
+      st.v[j] = b2 * st.v[j] + (1 - b2) * g * g;
+      p.d[j] -= lr * (st.m[j] / c1) / (Math.sqrt(st.v[j] / c2) + eps);
+    }
+  }
+}
+
+// Una vuelta completa por todos los textos.
+function epoca(m, secuencias, lr) {
+  let total = 0;
+  const orden = secuencias.map((_, i) => i);
+  for (let i = orden.length - 1; i > 0; i--) {
+    const j = Math.floor(rnd() * (i + 1));
+    [orden[i], orden[j]] = [orden[j], orden[i]];
+  }
+  for (const idx of orden) {
+    const seq = secuencias[idx];
+    resetTape(m.params);
+    const entrada = seq.slice(0, -1), objetivo = seq.slice(1);
+    const { logits } = adelante(m, entrada);
+    const loss = crossEntropy(logits, objetivo);
+    total += loss.d[0];
+    backward(loss);
+    adam(m, lr);
+  }
+  TAPE.ops.length = 0;
+  return total / secuencias.length;
+}
+
+function predecir(m, ids, temperatura) {
+  TAPE.on = false;
+  const { logits } = adelante(m, ids);
+  TAPE.ops.length = 0;
+  TAPE.on = true;
+  const V = m.V, fila = (ids.length - 1) * V, p = new Float64Array(V);
+  let mx = -Infinity;
+  for (let j = 0; j < V; j++) mx = Math.max(mx, logits.d[fila + j]);
+  let sum = 0;
+  for (let j = 0; j < V; j++) { const e = Math.exp((logits.d[fila + j] - mx) / temperatura); p[j] = e; sum += e; }
+  for (let j = 0; j < V; j++) p[j] /= sum;
+  return p;
+}
+
+// El azar de escribir es independiente del azar de entrenar: así el
+// entrenamiento es siempre el mismo y en cambio cada frase sale distinta.
+function muestrear(p) {
+  let r = Math.random(), acc = 0;
+  for (let j = 0; j < p.length; j++) { acc += p[j]; if (r <= acc) return j; }
+  return p.length - 1;
+}
+
+
+</script>
+<script>
+/* ===========================================================================
+   INTERFAZ. El motor del modelo está arriba, en core.js
+   =========================================================================== */
+const $ = s => document.querySelector(s);
+const crear = (tag, props = {}, html) => {
+  const e = document.createElement(tag);
+  Object.assign(e, props);
+  if (html !== undefined) e.innerHTML = html;
+  return e;
+};
+const esperar = ms => new Promise(r => setTimeout(r, ms));
+const suave = typeof matchMedia === 'function' && matchMedia('(prefers-reduced-motion: reduce)').matches;
+
+/* -------------------------------------------------------------- los datos */
+
+const FICHAS = {
+  "pingüino":  ["la antártida", "peces",    "nada"],
+  "camello":   ["el desierto",  "plantas",  "camina"],
+  "tiburón":   ["el océano",    "peces",    "nada"],
+  "águila":    ["la montaña",   "conejos",  "vuela"],
+  "oso":       ["el bosque",    "miel",     "camina"],
+  "mono":      ["la selva",     "plátanos", "trepa"],
+  "camaleón":  ["la selva",     "insectos", "trepa"],
+  "murciélago":["la cueva",     "insectos", "vuela"],
+  "delfín":    ["el océano",    "peces",    "nada"],
+  "cabra":     ["la montaña",   "plantas",  "trepa"],
+  "zorro":     ["el bosque",    "conejos",  "camina"],
+  "loro":      ["la selva",     "plátanos", "vuela"],
+};
+const ANIMALES = Object.keys(FICHAS);
+const PLANTILLAS = [
+  "el A vive en L .", "el A come C .", "el A vive en L y come C .",
+  "el A V muy bien .", "si buscas un A ve a L .",
+  "el A es un animal que V y come C .",
+];
+
+const CORPUS = [];
+for (const a of ANIMALES) {
+  const [l, c, v] = FICHAS[a];
+  for (const p of PLANTILLAS)
+    CORPUS.push(p.replace(/\bA\b/g, a).replace(/\bL\b/g, l).replace(/\bC\b/g, c).replace(/\bV\b/g, v));
+}
+const CONVERSACIONES = [];
+for (const a of ANIMALES) {
+  const [l, c, v] = FICHAS[a];
+  CONVERSACIONES.push(`pregunta : ¿ dónde vive el ${a} ? respuesta : el ${a} vive en ${l} .`);
+  CONVERSACIONES.push(`pregunta : ¿ qué come el ${a} ? respuesta : el ${a} come ${c} .`);
+  CONVERSACIONES.push(`pregunta : ¿ qué sabe hacer el ${a} ? respuesta : el ${a} ${v} muy bien .`);
+}
+
+// El vocabulario se fija UNA vez, antes de entrenar nada. Incluye las palabras
+// de la fase 2, que todavía no aparecen en ningún texto.
+const EXTRA = ["pregunta", "respuesta", ":", "¿", "?", "dónde", "qué", "sabe", "hacer"];
+const palabras = new Set(EXTRA);
+CORPUS.forEach(f => f.split(' ').forEach(p => palabras.add(p)));
+const VOCAB = ["<pad>", "<fin>", ...[...palabras].sort((a, b) => a.localeCompare(b, 'es'))];
+const STOI = {}; VOCAB.forEach((p, i) => STOI[p] = i);
+const CFG = { dim: 32, capas: 3, cabezas: 4 };
+
+const codificar = t => [...t.split(' ').map(p => STOI[p]), 1];
+const decodificar = ids => ids.filter(i => i > 1).map(i => VOCAB[i]).join(' ');
+
+/* ------------------------------------------------------------------ estado */
+
+const EST = { modelo: null, modeloRL: null, fase: 'vacio', pesosPre: null, ocupado: false, huella: null };
+
+const NOMBRES = {
+  vacio: 'sin entrenar', pretrain: 'preentrenado',
+  sft: 'sabe conversar', rl: 'con refuerzo', cargado: 'cargado de un archivo',
+};
+
+function marcarEtapa(clave, hecha = true) {
+  const li = document.querySelector(`.etapa[data-clave="${clave}"]`);
+  if (li) li.classList.toggle('hecha', hecha);
+}
+function ponerEstado(fase) {
+  EST.fase = fase;
+  const e = $('#estadoModelo');
+  e.textContent = NOMBRES[fase];
+  e.classList.toggle('vivo', fase !== 'vacio');
+}
+function copiarPesos(m) { return m.params.map(p => Float64Array.from(p.d)); }
+function pegarPesos(m, copia) { m.params.forEach((p, i) => p.d.set(copia[i])); }
+function contarParametros(m) { return m.params.reduce((s, p) => s + p.d.length, 0); }
+function huellaDe(m) {
+  let s = 0;
+  for (const p of m.params) for (let i = 0; i < p.d.length; i++) s += p.d[i];
+  return s;
+}
+
+// Genera texto a partir de un arranque. Solo lectura: no cambia nada del modelo.
+function generar(modelo, inicio, temperatura = 0.7, maximo = 14) {
+  const ids = inicio.split(' ').map(p => STOI[p]);
+  const n0 = ids.length;
+  for (let i = 0; i < maximo; i++) {
+    const p = predecir(modelo, ids, temperatura);
+    const siguiente = muestrear(p);
+    if (siguiente === 1) break;
+    ids.push(siguiente);
+  }
+  return { todo: decodificar(ids), resto: decodificar(ids.slice(n0)), ids };
+}
+
+/* ====================================================== portada: bigramas */
+// Un modelo sin red neuronal: solo cuenta qué palabra sigue a cuál.
+
+const SIGUIENTES = {};
+for (const frase of CORPUS) {
+  const p = frase.split(' ');
+  for (let i = 0; i < p.length - 1; i++) {
+    (SIGUIENTES[p[i]] = SIGUIENTES[p[i]] || []).push(p[i + 1]);
+  }
+}
+const heroEstado = { frase: ['el'], auto: !suave, temporizador: null };
+
+function distribucion(palabra) {
+  const lista = SIGUIENTES[palabra] || [];
+  const cuenta = {};
+  for (const p of lista) cuenta[p] = (cuenta[p] || 0) + 1;
+  const total = lista.length || 1;
+  return Object.entries(cuenta).map(([p, n]) => [p, n / total]).sort((a, b) => b[1] - a[1]);
+}
+function pintarHero(elegida) {
+  const ultima = heroEstado.frase[heroEstado.frase.length - 1];
+  const dist = distribucion(ultima).slice(0, 5);
+  $('#heroFrase').innerHTML = heroEstado.frase
+    .map((p, i) => i === heroEstado.frase.length - 1 && elegida ? `<span class="nueva">${p}</span>` : p)
+    .join(' ') + ' <span class="cursor">▌</span>';
+  $('#heroBarras').innerHTML = dist.map(([p, v]) => `
+    <div class="fila ${p === elegida ? 'elegida' : ''}">
+      <span class="pal">${p}</span>
+      <div class="pista"><i style="width:${(v * 100).toFixed(0)}%"></i></div>
+      <span class="num">${v.toFixed(2)}</span>
+    </div>`).join('') || '<span class="num">fin de la frase</span>';
+}
+function pasoHero() {
+  const ultima = heroEstado.frase[heroEstado.frase.length - 1];
+  const dist = distribucion(ultima);
+  if (!dist.length || heroEstado.frase.length > 11) { heroEstado.frase = ['el']; pintarHero(); return; }
+  let r = Math.random(), acc = 0, elegida = dist[0][0];
+  for (const [p, v] of dist) { acc += v; if (r <= acc) { elegida = p; break; } }
+  heroEstado.frase.push(elegida);
+  pintarHero(elegida);
+}
+function bucleHero() {
+  clearTimeout(heroEstado.temporizador);
+  if (!heroEstado.auto) return;
+  heroEstado.temporizador = setTimeout(() => { pasoHero(); bucleHero(); }, 950);
+}
+$('#heroPaso').onclick = () => { heroEstado.auto = false; $('#heroAuto').textContent = 'Continuar'; clearTimeout(heroEstado.temporizador); pasoHero(); };
+$('#heroAuto').onclick = () => {
+  heroEstado.auto = !heroEstado.auto;
+  $('#heroAuto').textContent = heroEstado.auto ? 'Pausar' : 'Continuar';
+  bucleHero();
+};
+pintarHero();
+bucleHero();
+if (suave) $('#heroAuto').textContent = 'Continuar';
+
+/* ==================================================== comparativa de tamaños */
+{
+  const nEste = (() => { const m = crearModelo(VOCAB.length, CFG); return contarParametros(m); })();
+  const datos = [
+    ['El que vas a entrenar aquí', nEste, 'en esta pestaña, 10 segundos'],
+    ['MiniMind-3', 64e6, 'una GPU, 2 horas, 0,40 €'],
+    ['GPT-3', 175e9, 'miles de GPU, meses, millones de €'],
+  ];
+  const tope = Math.log10(175e9);
+  $('#barrasTam').innerHTML = datos.map(([n, v, nota]) => `
+    <div class="medidor" style="grid-template-columns:min(46vw,270px) 1fr">
+      <span><b>${n}</b><br><span class="guia" style="font-size:14px">${v.toLocaleString('es')} parámetros · ${nota}</span></span>
+      <div class="pista"><i style="width:${(Math.log10(v) / tope * 100).toFixed(1)}%"></i></div>
+    </div>`).join('');
+}
+
+/* ============================================================ 1 · BPE */
+{
+  let simbolos = [], fusiones = [];
+  const reset = () => {
+    simbolos = [...$('#bpeTexto').value];
+    fusiones = [];
+    pintar();
+  };
+  const pintar = () => {
+    $('#bpeSalida').innerHTML = simbolos
+      .map(s => `<span class="ficha${s.length > 1 ? ' nueva' : ''}">${s.replace(/ /g, '␣')}</span>`).join('');
+    $('#bpeContador').textContent = `${fusiones.length} ${fusiones.length === 1 ? 'fusión' : 'fusiones'} · ${new Set(simbolos).size} tokens distintos`;
+    $('#bpeLista').innerHTML = fusiones.length
+      ? fusiones.map((f, i) => `${String(i + 1).padStart(2, ' ')}. «${f.a}» + «${f.b}» → «${f.r}»  (aparecía ${f.n} veces)`).join('<br>')
+      : 'Todavía ninguna: cada letra es un token.';
+  };
+  const fusionar = () => {
+    const cuenta = new Map();
+    for (let i = 0; i < simbolos.length - 1; i++) {
+      const k = simbolos[i] + '\u0000' + simbolos[i + 1];
+      cuenta.set(k, (cuenta.get(k) || 0) + 1);
+    }
+    let mejor = null, n = 1;
+    for (const [k, v] of cuenta) if (v > n) { n = v; mejor = k; }
+    if (!mejor) return false;
+    const [a, b] = mejor.split('\u0000'), r = a + b;
+    const nuevos = [];
+    for (let i = 0; i < simbolos.length;) {
+      if (i < simbolos.length - 1 && simbolos[i] === a && simbolos[i + 1] === b) { nuevos.push(r); i += 2; }
+      else { nuevos.push(simbolos[i]); i++; }
+    }
+    simbolos = nuevos;
+    fusiones.push({ a: a.replace(/ /g, '␣'), b: b.replace(/ /g, '␣'), r: r.replace(/ /g, '␣'), n });
+    return true;
+  };
+  $('#bpeFusionar').onclick = () => { if (fusionar()) pintar(); };
+  $('#bpeDiez').onclick = () => { for (let i = 0; i < 10; i++) if (!fusionar()) break; pintar(); };
+  $('#bpeReset').onclick = reset;
+  $('#bpeTexto').oninput = reset;
+  reset();
+  marcarEtapa('tokens');
+}
+
+/* ================================================ 1b · vocabulario y tabla */
+{
+  const actualizar = () => {
+    const v = +$('#slVocab').value, d = +$('#slDim').value;
+    const tabla = v * d, pct = 100 * tabla / 64e6;
+    $('#vVocab').textContent = v.toLocaleString('es');
+    $('#vDim').textContent = d;
+    $('#medidorTabla').querySelector('i').style.width = Math.min(100, pct) + '%';
+    $('#medidorTabla').classList.toggle('alerta', pct > 100);
+    $('#textoTabla').innerHTML = `<b>${(tabla / 1e6).toFixed(1)} millones de parámetros</b>, el ${pct.toFixed(0)} % de un modelo de 64 millones` +
+      (pct > 100 ? '. Solo la tabla de traducción ya ocupa más que el modelo entero: por eso un modelo pequeño necesita un vocabulario pequeño.' : '.');
+  };
+  $('#slVocab').oninput = actualizar;
+  $('#slDim').oninput = actualizar;
+  actualizar();
+}
+
+/* ================================================== 2 · piezas del modelo */
+{
+  const PIEZAS = [
+    ['Atención causal', 'mira toda la frase',
+      'Cada palabra pregunta a todas las anteriores cuáles le interesan y se queda con una mezcla de ellas. <em>Causal</em> significa que solo puede mirar hacia atrás: si pudiera ver la palabra siguiente, adivinarla no tendría ningún mérito. Esta es la pieza que da nombre al Transformer, y la verás dibujada en la etapa 4.'],
+    ['RoPE', 'sabe el orden',
+      'La atención, por sí sola, no distingue el orden: «el perro muerde al niño» y «el niño muerde al perro» le parecerían lo mismo. RoPE lo arregla girando un poco los números de cada palabra según la posición que ocupa. Una idea de 2021 que hoy llevan casi todos los modelos.'],
+    ['RMSNorm', 'evita que explote',
+      'Al pasar por muchas capas los números se descontrolan: se hacen enormes o diminutos y el entrenamiento se rompe. Esta pieza los reescala en cada paso. Es el cinturón de seguridad, y no aporta inteligencia ninguna: aporta que el resto funcione.'],
+    ['SwiGLU', 'guarda lo que sabe',
+      'Después de mirar el contexto, cada palabra pasa por una pequeña red con una puerta que decide qué información deja pasar. Aquí es donde vive la mayor parte de lo que el modelo sabe: es la pieza con más parámetros de las cuatro.'],
+  ];
+  $('#listaPiezas').innerHTML = PIEZAS.map(([n, t], i) =>
+    `<button class="pieza" aria-pressed="false" data-i="${i}">${n}<small>${t}</small></button>`).join('');
+  $('#listaPiezas').onclick = ev => {
+    const b = ev.target.closest('.pieza');
+    if (!b) return;
+    $('#listaPiezas').querySelectorAll('.pieza').forEach(x => x.setAttribute('aria-pressed', x === b));
+    $('#piezaDetalle').innerHTML = PIEZAS[+b.dataset.i][2];
+    marcarEtapa('piezas');
+  };
+}
+
+/* ================================================ 3 · entrenamiento (pretrain) */
+
+function dibujarCurva(lienzo, series, opciones = {}) {
+  const ctx = lienzo && lienzo.getContext && lienzo.getContext('2d');
+  if (!ctx) return;
+  const W = lienzo.width, H = lienzo.height, m = { i: 46, d: 12, a: 14, b: 30 };
+  ctx.clearRect(0, 0, W, H);
+  const todos = series.flatMap(s => s.datos);
+  if (!todos.length) return;
+  const max = opciones.max !== undefined ? opciones.max : Math.max(...todos) * 1.05;
+  const min = opciones.min !== undefined ? opciones.min : 0;
+  const n = Math.max(...series.map(s => s.datos.length), 2);
+  const X = i => m.i + (W - m.i - m.d) * (i / (n - 1));
+  const Y = v => H - m.b - (H - m.a - m.b) * ((v - min) / (max - min || 1));
+  ctx.strokeStyle = '#C6D0C8'; ctx.fillStyle = '#5E7178';
+  ctx.font = '12px "IBM Plex Mono", monospace'; ctx.lineWidth = 1;
+  for (let k = 0; k <= 4; k++) {
+    const v = min + (max - min) * k / 4;
+    ctx.beginPath(); ctx.moveTo(m.i, Y(v)); ctx.lineTo(W - m.d, Y(v)); ctx.stroke();
+    ctx.fillText(v.toFixed(1), 6, Y(v) + 4);
+  }
+  ctx.fillText(opciones.ejeX || '', W / 2 - 30, H - 8);
+  series.forEach(s => {
+    ctx.strokeStyle = s.color; ctx.lineWidth = 2.5; ctx.beginPath();
+    s.datos.forEach((v, i) => i ? ctx.lineTo(X(i), Y(v)) : ctx.moveTo(X(i), Y(v)));
+    ctx.stroke();
+    if (s.puntos) s.datos.forEach((v, i) => { ctx.fillStyle = s.color; ctx.beginPath(); ctx.arc(X(i), Y(v), 3.5, 0, 7); ctx.fill(); });
+  });
+}
+
+const perdidas = [];
+$('#btnEntrenar').onclick = async () => {
+  if (EST.ocupado) return;
+  EST.ocupado = true;
+  const btn = $('#btnEntrenar');
+  btn.disabled = true;
+  setSeed(11);
+  EST.modelo = crearModelo(VOCAB.length, CFG);
+  EST.modeloRL = null;
+  RL.notas = []; RL.rondas = 0;
+  respuestasAntes = null;
+  perdidas.length = 0;
+  ponerEstado('vacio');
+  $('#muestras').innerHTML = generar(EST.modelo, 'el oso', 1).todo + '<br>' + generar(EST.modelo, 'el delfín', 1).todo;
+
+  const secuencias = CORPUS.map(codificar);
+  const EPOCAS = 60, t0 = performance.now();
+  for (let e = 0; e < EPOCAS; e++) {
+    const l = epoca(EST.modelo, secuencias, e < 45 ? 8e-3 : 2e-3);
+    perdidas.push(l);
+    dibujarCurva($('#lienzoPerdida'), [{ datos: perdidas, color: '#1E7A6B' }], { ejeX: 'vueltas al texto' });
+    $('#progresoTexto').textContent = `vuelta ${e + 1} de ${EPOCAS} · pérdida ${l.toFixed(3)}`;
+    if (e % 6 === 5 || e === EPOCAS - 1) {
+      $('#muestras').innerHTML = ['el oso', 'el delfín', 'el mono vive en']
+        .map(s => `<b>${s}</b>${generar(EST.modelo, s, 0.7).todo.slice(s.length)}`).join('<br>');
+    }
+    await esperar(0);
+  }
+  const seg = ((performance.now() - t0) / 1000).toFixed(1);
+  $('#progresoTexto').innerHTML = `Entrenado en <b>${seg} segundos</b> · ${contarParametros(EST.modelo).toLocaleString('es')} parámetros ajustados`;
+  EST.pesosPre = copiarPesos(EST.modelo);
+  ponerEstado('pretrain');
+  marcarEtapa('pretrain');
+  btn.textContent = 'Entrenar otra vez desde cero';
+  btn.disabled = false;
+  EST.ocupado = false;
+  pintarDependientes();
+};
+
+/* ------------------------------------------------- secciones que necesitan modelo */
+
+function bloqueo(texto) {
+  return `<div class="bloqueado"><p>${texto}</p>
+    <button class="btn" onclick="document.querySelector('#pretrain').scrollIntoView()">Ir a entrenar el modelo</button></div>`;
+}
+
+function pintarDependientes() {
+  pintarAtencion();
+  pintarSft();
+  pintarRl();
+  pintarInferencia();
+}
+
+/* ================================================== 4 · mapa de atención */
+function pintarAtencion() {
+  const caja = $('#atencionCaja');
+  if (!EST.modelo) {
+    caja.innerHTML = bloqueo('Aquí se dibuja el reparto de atención de tu modelo. Para eso hace falta un modelo entrenado, y todavía no hay ninguno en memoria.');
+    return;
+  }
+  caja.innerHTML = `<div class="panel">
+      <div class="controles">
+        <select id="atFrase"></select>
+        <select id="atCapa"><option value="0">capa 1</option><option value="1" selected>capa 2</option></select>
+        <select id="atCabeza">${[0, 1, 2, 3].map(i => `<option value="${i}">cabeza ${i + 1}</option>`).join('')}</select>
+      </div>
+      <div id="rejilla" class="rejilla"></div>
+      <p class="pie" id="atPie"></p>
+    </div>`;
+  const frases = [
+    'el mono vive en la selva y come plátanos',
+    'el pingüino es un animal que nada y come peces',
+    'si buscas un águila ve a la montaña',
+    'el oso vive en el bosque',
+  ];
+  $('#atFrase').innerHTML = frases.map(f => `<option>${f}</option>`).join('');
+  const pintar = () => {
+    const frase = $('#atFrase').value.split(' ');
+    const ids = frase.map(p => STOI[p]);
+    TAPE.on = false;
+    const { atenciones } = adelante(EST.modelo, ids, true);
+    TAPE.ops.length = 0;
+    TAPE.on = true;
+    const at = atenciones[(+$('#atCapa').value) * CFG.cabezas + (+$('#atCabeza').value)];
+    const n = frase.length;
+    const rej = $('#rejilla');
+    rej.style.gridTemplateColumns = `minmax(64px,auto) repeat(${n}, minmax(20px,1fr))`;
+    let html = '<div></div>' + frase.map(p => `<div class="cab h">${p}</div>`).join('');
+    for (let i = 0; i < n; i++) {
+      html += `<div class="cab v">${frase[i]}</div>`;
+      for (let j = 0; j < n; j++) {
+        const v = at.d[i * n + j];
+        const t = j > i ? 0 : Math.min(1, v * 1.6);
+        html += `<div class="celda" title="«${frase[i]}» mira a «${frase[j]}»: ${(v * 100).toFixed(0)} %"
+                   style="background:${j > i ? '#E4EAE2' : `rgba(224,165,38,${0.10 + t * 0.9})`}"></div>`;
+      }
+    }
+    rej.innerHTML = html;
+    $('#atPie').innerHTML = 'La mitad de arriba a la derecha está apagada: es la máscara causal, la prohibición de mirar hacia adelante. Pasa el ratón por una casilla para ver el número exacto.';
+  };
+  ['atFrase', 'atCapa', 'atCabeza'].forEach(id => $('#' + id).onchange = pintar);
+  pintar();
+  marcarEtapa('atencion');
+}
+
+/* ============================================== 5 · ajuste a conversación */
+const PREGUNTAS_SFT = [
+  ['¿ dónde vive el oso ?', 'oso'], ['¿ qué come el delfín ?', 'delfín'],
+  ['¿ qué sabe hacer el mono ?', 'mono'], ['¿ dónde vive el camello ?', 'camello'],
+];
+let respuestasAntes = null;
+
+function pintarSft() {
+  const caja = $('#sftCaja');
+  if (!EST.modelo) {
+    caja.innerHTML = bloqueo('Para preguntarle algo a tu modelo primero hay que entrenarlo.');
+    return;
+  }
+  if (!respuestasAntes) {
+    respuestasAntes = PREGUNTAS_SFT.map(([q]) => generar(EST.modelo, `pregunta : ${q} respuesta :`, 0.7, 12).resto || '(no dice nada)');
+  }
+  const hecho = EST.fase === 'sft' || EST.fase === 'rl';
+  caja.innerHTML = `<div class="panel">
+    <h3>Las mismas cuatro preguntas, antes y después</h3>
+    <p class="pie" style="margin:0 0 16px">La fase 2 son 36 conversaciones con el formato
+      <code>pregunta : … respuesta : …</code>. Ni un dato nuevo: el modelo ya sabía dónde vive el oso.</p>
+    <table>
+      <thead><tr><th style="width:30%">Pregunta</th><th>Solo con la etapa 3</th><th>Después de la fase 2</th></tr></thead>
+      <tbody>${PREGUNTAS_SFT.map(([q], i) => `<tr>
+        <td>${q.replace(/ ([?¿]) ?/g, '$1').replace('¿', '¿')}</td>
+        <td style="font-family:var(--mono);font-size:13.5px;color:var(--apagado)">${respuestasAntes[i]}</td>
+        <td style="font-family:var(--mono);font-size:13.5px" id="despues${i}">${hecho ? '' : '—'}</td></tr>`).join('')}
+      </tbody>
+    </table>
+    <div class="controles">
+      <button class="btn" id="btnSft" ${hecho ? 'disabled' : ''}>${hecho ? 'Fase 2 completada' : 'Entrenar la fase 2 (36 conversaciones)'}</button>
+      <span class="guia" id="sftProgreso" style="font-size:15px"></span>
+    </div>
+    ${hecho ? '<p class="pie">Ese salto —de máquina que continúa texto a asistente que responde— es exactamente la diferencia entre un modelo base y un ChatGPT. Y se consigue solo cambiando la forma de los textos de entrenamiento.</p>' : ''}
+  </div>`;
+  if (hecho) rellenarDespues();
+  else $('#btnSft').onclick = entrenarSft;
+}
+
+function rellenarDespues() {
+  PREGUNTAS_SFT.forEach(([q], i) => {
+    const celda = $('#despues' + i);
+    if (celda) celda.textContent = generar(EST.modelo, `pregunta : ${q} respuesta :`, 0.5, 12).resto;
+  });
+}
+
+async function entrenarSft() {
+  if (EST.ocupado) return;
+  EST.ocupado = true;
+  $('#btnSft').disabled = true;
+  setSeed(21);
+  const secuencias = CONVERSACIONES.map(codificar);
+  const EPOCAS = 90;
+  for (let e = 0; e < EPOCAS; e++) {
+    const l = epoca(EST.modelo, secuencias, e < 67 ? 4e-3 : 1e-3);
+    $('#sftProgreso').textContent = `vuelta ${e + 1} de ${EPOCAS} · pérdida ${l.toFixed(3)}`;
+    await esperar(0);
+  }
+  EST.ocupado = false;
+  ponerEstado('sft');
+  marcarEtapa('sft');
+  pintarSft();
+  pintarInferencia();
+}
+
+/* ==================================================== 6 · refuerzo (RLAIF) */
+const RL = { notas: [], rondas: 0, pesos: { lugar: 1, comida: 1, breve: 0.5 } };
+
+function recompensa(frase, animal) {
+  const [lugar, comida] = FICHAS[animal];
+  let n = 0;
+  if (frase.includes(lugar)) n += RL.pesos.lugar;
+  if (frase.includes(comida)) n += RL.pesos.comida;
+  if (frase.endsWith('.')) n += 0.3;
+  if (frase.split(' ').length > 11) n -= RL.pesos.breve;
+  return n;
+}
+function notaMedia() {
+  let s = 0, k = 0;
+  for (const a of ANIMALES)
+    for (let i = 0; i < 3; i++) { s += recompensa(generar(EST.modeloRL, 'el ' + a, 1, 12).todo, a); k++; }
+  return s / k;
+}
+
+function pintarRl() {
+  const caja = $('#rlCaja');
+  if (!EST.modelo) {
+    caja.innerHTML = bloqueo('El refuerzo parte del modelo preentrenado de la etapa 3.');
+    return;
+  }
+  if (!EST.modeloRL) {
+    EST.modeloRL = crearModelo(VOCAB.length, CFG);
+    pegarPesos(EST.modeloRL, EST.pesosPre);
+  }
+  caja.innerHTML = `<div class="panel">
+    <h3>Escribe tú el corrector</h3>
+    <p class="pie" style="margin:0 0 10px"><b>Ojo:</b> esta etapa trabaja sobre una copia aparte,
+      recién salida de la etapa 3 y sin la fase 2. Así se ve subir la nota desde abajo, y el modelo
+      con el que conversas en la etapa 7 se queda intacto.</p>
+    <p class="pie" style="margin:0 0 10px">El modelo escribe 8 frases sobre cada animal, tú le pones nota
+      y se queda entrenando con las mejores. No le damos ni una sola frase correcta.</p>
+    <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(210px,1fr));gap:0 24px">
+      <div class="deslizador"><label for="rwLugar">Premio por decir dónde vive <span class="val" id="vLugar">1,0</span></label><input type="range" id="rwLugar" min="0" max="2" step="0.1" value="1"></div>
+      <div class="deslizador"><label for="rwComida">Premio por decir qué come <span class="val" id="vComida">1,0</span></label><input type="range" id="rwComida" min="0" max="2" step="0.1" value="1"></div>
+      <div class="deslizador"><label for="rwBreve">Castigo por enrollarse <span class="val" id="vBreve">0,5</span></label><input type="range" id="rwBreve" min="0" max="2" step="0.1" value="0.5"></div>
+    </div>
+    <div class="controles">
+      <button class="btn rl" id="btnRonda">Ejecutar una ronda</button>
+      <button class="btn sec" id="btnRlReset">Volver al modelo preentrenado</button>
+      <span class="guia" id="rlProgreso" style="font-size:15px"></span>
+    </div>
+    <div class="escenario" style="border:none;padding:0;grid-template-columns:minmax(0,.85fr) minmax(0,1.15fr);gap:26px">
+      <div>
+        <div class="rotulo" style="color:var(--apagado)">Nota media</div>
+        <canvas id="lienzoNota" width="420" height="240" style="width:100%;height:auto;background:#F7F9F5;border:1px solid var(--linea);border-radius:3px"></canvas>
+      </div>
+      <div>
+        <div class="rotulo" style="color:var(--apagado)">Lo que escribe, y si es verdad</div>
+        <div class="salida" id="rlSalida" style="font-size:13.5px"></div>
+      </div>
+    </div>
+  </div>`;
+  const sinc = () => {
+    RL.pesos.lugar = +$('#rwLugar').value; RL.pesos.comida = +$('#rwComida').value; RL.pesos.breve = +$('#rwBreve').value;
+    $('#vLugar').textContent = RL.pesos.lugar.toFixed(1).replace('.', ',');
+    $('#vComida').textContent = RL.pesos.comida.toFixed(1).replace('.', ',');
+    $('#vBreve').textContent = RL.pesos.breve.toFixed(1).replace('.', ',');
+  };
+  ['rwLugar', 'rwComida', 'rwBreve'].forEach(id => $('#' + id).oninput = sinc);
+  sinc();
+  $('#btnRonda').onclick = rondaRefuerzo;
+  $('#btnRlReset').onclick = () => {
+    pegarPesos(EST.modeloRL, EST.pesosPre);
+    RL.notas = []; RL.rondas = 0;
+    ponerEstado('pretrain');
+    mostrarRl();
+  };
+  mostrarRl();
+  marcarEtapa('refuerzo');
+}
+
+function mostrarRl() {
+  if (!RL.notas.length) RL.notas = [notaMedia()];
+  dibujarCurva($('#lienzoNota'), [{ datos: RL.notas, color: '#7B3B63', puntos: true }],
+    { ejeX: 'rondas', min: 0, max: Math.max(2.6, ...RL.notas) * 1.15 });
+  $('#rlSalida').innerHTML = ANIMALES.slice(0, 6).map(a => {
+    const f = generar(EST.modeloRL, 'el ' + a, 0.6, 12).todo;
+    const suyo = FICHAS[a][0], suya = FICHAS[a][1];
+    const otros = ANIMALES.map(x => FICHAS[x][0]).concat(ANIMALES.map(x => FICHAS[x][1]));
+    const miente = otros.some(o => o !== suyo && o !== suya && f.includes(o));
+    return `${f} <b style="color:${miente ? '#B3452B' : 'var(--jade)'}">${miente ? '✗ falso' : '✓'}</b>`;
+  }).join('<br>');
+}
+
+async function rondaRefuerzo() {
+  if (EST.ocupado) return;
+  EST.ocupado = true;
+  $('#btnRonda').disabled = true;
+  const buenas = [];
+  for (const a of ANIMALES) {
+    let mejor = null, nota = -99;
+    for (let i = 0; i < 8; i++) {
+      const f = generar(EST.modeloRL, 'el ' + a, 1, 12).todo;
+      const n = recompensa(f, a);
+      if (n > nota) { nota = n; mejor = f; }
+    }
+    const tope = 0.6 * (RL.pesos.lugar + RL.pesos.comida) + 0.3;
+    if (nota >= tope) buenas.push(mejor);
+    $('#rlProgreso').textContent = `escribiendo y corrigiendo… ${a}`;
+    await esperar(0);
+  }
+  $('#rlProgreso').textContent = `${buenas.length} de 12 respuestas dignas de aprender · reforzando…`;
+  if (buenas.length) {
+    const secuencias = buenas.map(codificar);
+    for (let e = 0; e < 20; e++) { epoca(EST.modeloRL, secuencias, 2e-3); await esperar(0); }
+  }
+  RL.rondas++;
+  RL.notas.push(notaMedia());
+  $('#rlProgreso').textContent = `ronda ${RL.rondas} terminada · nota media ${RL.notas[RL.notas.length - 1].toFixed(2)}`;
+  $('#btnRonda').disabled = false;
+  EST.ocupado = false;
+  mostrarRl();
+}
+
+/* ============================================ 7 · guardar, borrar, cargar, usar */
+function pintarInferencia() {
+  const caja = $('#infCaja');
+  if (!EST.modelo) {
+    caja.innerHTML = `<div class="bloqueado">
+      <p><b>No hay ningún modelo en memoria.</b> Si guardaste el archivo, cárgalo aquí y volverá todo a funcionar. Si no, toca entrenar otra vez.</p>
+      <div class="controles">
+        <label class="btn sec" style="cursor:pointer">Cargar un archivo<input type="file" id="ficheroModelo" accept=".json" hidden></label>
+        <button class="btn" onclick="document.querySelector('#pretrain').scrollIntoView()">Ir a entrenar</button>
+      </div></div>`;
+    $('#ficheroModelo').onchange = cargarArchivo;
+    return;
+  }
+  caja.innerHTML = `<div class="panel">
+    <h3>El archivo</h3>
+    <p class="pie" style="margin:0 0 6px">Con los pesos no basta. Un archivo lleno de números no sirve de nada si
+      no sabes cómo colocarlos ni qué significa cada token, así que hay que guardar tres cosas: los
+      <b>pesos</b>, el <b>vocabulario</b> y la <b>configuración</b>. Es lo mismo que hay en una carpeta de
+      MiniMind: <code>model.safetensors</code>, <code>tokenizer.json</code> y <code>config.json</code>.</p>
+    <div class="controles">
+      <button class="btn" id="btnGuardar">Guardar el modelo</button>
+      <label class="btn sec" style="cursor:pointer">Cargar un archivo<input type="file" id="ficheroModelo" accept=".json" hidden></label>
+      <button class="btn sec" id="btnBorrar">Borrar de la memoria</button>
+      <span class="guia" id="infProgreso" style="font-size:15px"></span>
+    </div>
+  </div>
+  <div class="panel">
+    <h3>Hablar con él</h3>
+    <p class="pie" style="margin:0 0 14px">Solo conoce las palabras de sus 72 frases. Cada respuesta se cronometra.</p>
+    <div class="sugerencias" id="sugerencias"></div>
+    <div id="chatLog"></div>
+    <div class="controles" style="margin:0">
+      <input type="text" id="chatTexto" placeholder="dónde vive el zorro" style="flex:1;min-width:220px">
+      <button class="btn" id="chatEnviar">Preguntar</button>
+    </div>
+    <p class="pie" id="huellaTexto"></p>
+  </div>`;
+  $('#btnGuardar').onclick = guardarArchivo;
+  $('#btnBorrar').onclick = () => {
+    EST.modelo = null; EST.modeloRL = null; EST.pesosPre = null; respuestasAntes = null;
+    RL.notas = []; RL.rondas = 0;
+    ponerEstado('vacio');
+    ['pretrain', 'atencion', 'sft', 'refuerzo', 'inferencia'].forEach(k => marcarEtapa(k, false));
+    $('#btnEntrenar').textContent = 'Entrenar el modelo';
+    $('#progresoTexto').textContent = 'Memoria vacía: no queda ningún modelo.';
+    pintarDependientes();
+  };
+  $('#ficheroModelo').onchange = cargarArchivo;
+  $('#sugerencias').innerHTML = ['dónde vive el zorro', 'qué come el mono', 'qué sabe hacer el águila']
+    .map(s => `<button class="btn sec peq sug">${s}</button>`).join('');
+  $('#sugerencias').onclick = e => { if (e.target.classList.contains('sug')) preguntar(e.target.textContent); };
+  $('#chatEnviar').onclick = () => preguntar($('#chatTexto').value);
+  $('#chatTexto').onkeydown = e => { if (e.key === 'Enter') preguntar($('#chatTexto').value); };
+  EST.huella = huellaDe(EST.modelo);
+  $('#huellaTexto').textContent = `Huella de los parámetros: ${EST.huella.toFixed(6)}. Vuelve a mirarla después de conversar.`;
+  marcarEtapa('inferencia');
+}
+
+function guardarArchivo() {
+  const punto = {
+    formato: 'mini-llm/1',
+    vocabulario: VOCAB,
+    config: CFG,
+    pesos: EST.modelo.params.map(p => Array.from(p.d, v => +v.toFixed(4))),
+  };
+  const texto = JSON.stringify(punto);
+  const url = URL.createObjectURL(new Blob([texto], { type: 'application/json' }));
+  const a = crear('a', { href: url, download: 'mi-modelo.json' });
+  a.click();
+  URL.revokeObjectURL(url);
+  $('#infProgreso').innerHTML = `Guardado: <b>${(texto.length / 1024).toFixed(0)} KB</b>. El equivalente en MiniMind-3 ocupa unos 244 MB.`;
+}
+
+function cargarArchivo(ev) {
+  const f = ev.target.files[0];
+  if (!f) return;
+  const lector = new FileReader();
+  lector.onload = () => {
+    try {
+      const t0 = performance.now();
+      const punto = JSON.parse(lector.result);
+      if (punto.formato !== 'mini-llm/1') throw new Error('formato');
+      const m = crearModelo(punto.vocabulario.length, punto.config);
+      m.params.forEach((p, i) => p.d.set(punto.pesos[i]));
+      EST.modelo = m;
+      EST.modeloRL = null;
+      EST.pesosPre = copiarPesos(m);
+      respuestasAntes = null;
+      RL.notas = []; RL.rondas = 0;
+      ponerEstado('cargado');
+      ['atencion', 'inferencia'].forEach(k => marcarEtapa(k));
+      pintarDependientes();
+      $('#infProgreso').innerHTML = `Cargado en <b>${(performance.now() - t0).toFixed(0)} ms</b>. Entrenar tardó segundos; cargar lo entrenado, un parpadeo.`;
+    } catch (e) {
+      $('#infProgreso').textContent = 'Ese archivo no es un modelo guardado desde esta página.';
+    }
+  };
+  lector.readAsText(f);
+}
+
+async function preguntar(texto) {
+  const limpio = texto.trim().toLowerCase().replace(/[¿?.,]/g, '').replace(/\s+/g, ' ');
+  if (!limpio) return;
+  $('#chatTexto').value = '';
+  $('#chatLog').append(crear('div', { className: 'msg yo' }, texto));
+  const palabras = limpio.split(' ');
+  const fuera = palabras.filter(p => !(p in STOI));
+  if (fuera.length) {
+    $('#chatLog').append(crear('div', { className: 'msg aviso' },
+      `No conozco «${fuera.join('», «')}». Mi vocabulario son ${VOCAB.length} tokens: los animales de mis frases, sus sitios y sus comidas.`));
+    return;
+  }
+  const t0 = performance.now();
+  const r = generar(EST.modelo, `pregunta : ¿ ${limpio} ? respuesta :`, 0.5, 12);
+  const ms = (performance.now() - t0).toFixed(0);
+  const burbuja = crear('div', { className: 'msg bot' }, '');
+  $('#chatLog').append(burbuja);
+  const trozos = (r.resto || '(no sé qué decir)').split(' ');
+  for (let i = 0; i < trozos.length; i++) {
+    burbuja.textContent = trozos.slice(0, i + 1).join(' ');
+    if (!suave) await esperar(55);
+  }
+  burbuja.innerHTML += ` <span class="num" style="color:var(--apagado);font-size:12px">${ms} ms</span>`;
+  const ahora = huellaDe(EST.modelo);
+  $('#huellaTexto').innerHTML = `Huella antes de conversar: <b>${EST.huella.toFixed(6)}</b> · ahora: <b>${ahora.toFixed(6)}</b>. ` +
+    (Math.abs(ahora - EST.huella) < 1e-9
+      ? 'Idéntica. El modelo ha respondido sin cambiar ni un decimal: eso es la inferencia. Y por eso no se acuerda de ti mañana.'
+      : 'Algo ha cambiado, y no debería.');
+}
+
+/* ------------------------------------------------------ raíl: etapa visible */
+if (typeof IntersectionObserver === 'function') {
+  const obs = new IntersectionObserver(entradas => {
+    entradas.forEach(e => {
+      if (!e.isIntersecting) return;
+      document.querySelectorAll('.etapa').forEach(li =>
+        li.classList.toggle('activa', li.dataset.clave === e.target.id));
+    });
+  }, { rootMargin: '-45% 0px -50% 0px' });
+  ['tokens', 'piezas', 'pretrain', 'atencion', 'sft', 'refuerzo', 'inferencia']
+    .forEach(id => { const el = document.getElementById(id); if (el) obs.observe(el); });
+}
+
+pintarDependientes();
+
+</script>
+</body>
+</html>
